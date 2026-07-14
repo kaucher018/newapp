@@ -4,12 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\GameSetting;
-use App\Models\Wallet;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Models\Wallet;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
+use Illuminate\Support\Facades\Cache;
 
 class GameController extends Controller
 {
@@ -33,25 +34,43 @@ class GameController extends Controller
         return response()->json(['success' => true, 'games' => GameSetting::all()]);
     }
 
-    public function getTurnoverStatus(Request $request)
+    public function calculateCurrentTurnover($userId)
     {
-        $user = auth()->user();
-        $status = $this->calculateCurrentTurnover($user->id);
-        
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'last_deposit_amount'   => $status['deposit_amount'],
-                'target_turnover'       => $status['target_turnover'],
-                'current_wagering'      => $status['current_wagering'],
-                'progress_percentage'   => round($status['progress_ratio'] * 100, 2),
-                'turnover_completed'    => $status['progress_ratio'] >= 1.0,
-                'is_in_trap_zone'       => $status['progress_ratio'] >= 0.85 && $status['progress_ratio'] < 1.0
-            ]
-        ]);
+        // ক্যাশে জমা রাখা হচ্ছে ৩০ মিনিটের জন্য
+        return Cache::remember("user_turnover_{$userId}", 1800, function () use ($userId) {
+            $lastDeposit = Transaction::select('id', 'amount', 'created_at')
+                ->where('user_id', $userId)
+                ->where('type', 'deposit')
+                ->where('status', 'approved')
+                ->latest()
+                ->first();
+
+            if (!$lastDeposit) {
+                return ['deposit_amount' => 0, 'target_turnover' => 0, 'current_wagering' => 0, 'progress_ratio' => 0];
+            }
+
+            $depositAmount = (float)$lastDeposit->amount;
+            $targetTurnover = $depositAmount * 2; 
+
+            $currentWagering = Transaction::where('user_id', $userId)
+                ->whereIn('type', ['game_play', 'free_spin_play'])
+                ->where('created_at', '>=', $lastDeposit->created_at)
+                ->where('amount', '<', 0)
+                ->sum('amount');
+
+            $currentWagering = abs($currentWagering); 
+            $progressRatio = $targetTurnover > 0 ? ($currentWagering / $targetTurnover) : 0;
+
+            return [
+                'deposit_amount'   => $depositAmount,
+                'target_turnover'  => $targetTurnover,
+                'current_wagering' => $currentWagering,
+                'progress_ratio'   => $progressRatio
+            ];
+        });
     }
 
-public function playGame(Request $request)
+    public function playGame(Request $request)
     {
         $isFreeSpin = filter_var($request->input('is_free_spin'), FILTER_VALIDATE_BOOLEAN);
 
@@ -114,27 +133,30 @@ public function playGame(Request $request)
             // ⏱️ ২৪ ঘণ্টা (প্রথম দিন) সময়সীমা চেক লজিক
             $isFirstDay = $user->created_at->diffInHours(now()) < 24;
 
+            // 🎯 ডাইনামিক উইনিং সিলিং জেনারেটর (২৭০ থেকে ৩০৫ টাকার মধ্যে একটি র্যান্ডম কিন্তু ইউজার-ভিত্তিক স্টেবল ভ্যালু)
+            $dynamicCeiling = 270.00 + ($user->id % 36);
+
             // =========================================================
-            // 🎲 আপনার নিয়মানুযায়ী ডাইনামিক ডিপোজিট ও আইডি অ্যালগরিদম
+            // 🎲 আপনার নিয়মানুযায়ী ডাইনামিক ডিপোজিট ও আইডি অ্যালগরিদম
             // =========================================================
             
             if ($isTurnoverCompleted) {
-                // 🛑 টার্নওভার কমপ্লিট হওয়ার পর সরাসরি ৯৫% লস মোড
+                // 🛑 টার্নওভার কমপ্লিট হওয়ার পর সরাসরি ৯৫% লস মোড
                 $winChance = 5;
                 if (rand(1, 100) > $winChance) {
                     $forceLoss = true;
                 }
             } else {
-                // 🔄 টার্নওভার বাকি থাকা অবস্থায় কন্ডিশনসমূহ:
+                // 🔄 টার্নওভার বাকি থাকা অবস্থায় কন্ডিশনসমূহ:
 
                 // ⏳ শুধুমাত্র প্রথম দিন (২৪ ঘণ্টার মধ্যে) স্পেশাল ট্র্যাপগুলো কাজ করবে
                 if ($isFirstDay) {
                     
                     if ($depositCount <= 1) {
-                        // 1️⃣ ১ম ডিপোজিট: জোড় আইডি ১৮০ সহ সর্বোচ্চ ২৭০ টাকা পর্যন্ত প্রফিট পুশ পাবে
+                        // 1️⃣ ১ম ডিপোজিট: জোড় আইডি ১৮০ সহ ডাইনামিক সিলিং (২৭০ - ৩০৫) পর্যন্ত প্রফিট পুশ পাবে
                         if ($isUserIdEven) {
-                            // সেফটি লক: অলরেডি ২৭০ বা তার বেশি ব্যালেন্স থাকলে আর জিতবে না
-                            if (($currentWalletTotal - $betAmount) >= 270.00 || $currentWalletTotal >= 270.00) {
+                            // সেফটি লক: ডাইনামিক ব্যালেন্স লিমিট ক্রস করলেই লস করানো হবে
+                            if (($currentWalletTotal - $betAmount) >= $dynamicCeiling || $currentWalletTotal >= $dynamicCeiling) {
                                 $forceLoss = true;
                             } else {
                                 // ডাইনামিক উইন বুস্ট: টাকা যেন হুট করে শেষ না হয়, তাই ব্যালেন্স কম থাকলে উইন চান্স বাড়িয়ে (৭০%) ধরে রাখা হবে
@@ -144,7 +166,7 @@ public function playGame(Request $request)
                                 }
                             }
                         } else {
-                            // বেজোড় আইডি ১ম ডিপোজিটে সরাসরি হারবে (১৫% উইন চান্স)
+                            // বেজোড় আইডি ১ম ডিপোজিটে সরাসরি হারবে (১৫% উইন চান্স)
                             $winChance = 15; 
                             if (rand(1, 100) > $winChance) {
                                 $forceLoss = true;
@@ -152,7 +174,7 @@ public function playGame(Request $request)
                         }
 
                     } elseif ($depositCount === 2) {
-                        // 2️⃣ ২য় ডিপোজিট: বেজোড় (Odd) আইডিগুলো টাকা দ্বিগুণ করবে
+                        // 2️⃣ ২য় ডিপোজিট: বেজোড় (Odd) আইডিগুলো টাকা দ্বিগুণ করবে
                         if (!$isUserIdEven) {
                             $maxProfitCeiling = $lastDepositAmount * 2.0; 
 
@@ -165,7 +187,7 @@ public function playGame(Request $request)
                                 }
                             }
                         } else {
-                            // ২য় ডিপোজিটে জোড় আইডি হলে লস ফেস করবে
+                            // ২য় ডিপোজিটে জোড় আইডি হলে লস ফেস করবে
                             $winChance = 5;
                             if (rand(1, 100) > $winChance) {
                                 $forceLoss = true;
@@ -173,7 +195,7 @@ public function playGame(Request $request)
                         }
 
                     } elseif ($depositCount === 3) {
-                        // 3️⃣ ৩য় ডিপোজিট: জোড় (Even) আইডিগুলো টাকা দ্বিগুণ করবে
+                        // 3️⃣ ৩য় ডিপোজিট: জোড় (Even) আইডিগুলো টাকা দ্বিগুণ করবে
                         if ($isUserIdEven) {
                             $maxProfitCeiling = $lastDepositAmount * 2.0; 
 
@@ -186,7 +208,7 @@ public function playGame(Request $request)
                                 }
                             }
                         } else {
-                            // ৩য় ডিপোজিটে বেজোড় আইডি হলে লস ফেস করবে
+                            // ৩য় ডিপোজিটে বেজোড় আইডি হলে লস ফেস করবে
                             $winChance = 5;
                             if (rand(1, 100) > $winChance) {
                                 $forceLoss = true;
@@ -202,7 +224,7 @@ public function playGame(Request $request)
                     }
 
                 } else {
-                    // 📅 ২য় দিন থেকে (২৪ ঘণ্টা পার হলে) সব ইউজার সরাসরি ৭০% লস ও ৩০% উইন সিস্টেমে পড়বে
+                    // 📅 ২য় দিন থেকে (২৪ ঘণ্টা পার হলে) সব ইউজার সরাসরি ৭০% লস ও ৩০% উইন সিস্টেমে পড়বে
                     $winChance = 30;
                     if (rand(1, 100) > $winChance) {
                         $forceLoss = true;
@@ -210,7 +232,7 @@ public function playGame(Request $request)
                 }
             }
 
-            // লস হলে ৪০% ক্ষেত্রে Near Miss ফিল দেওয়া
+            // লস হলে ৪০% ক্ষেত্রে Near Miss ফিল দেওয়া
             if ($forceLoss) {
                 $isNearMiss = (rand(1, 100) <= 40);
             }
@@ -231,21 +253,21 @@ public function playGame(Request $request)
                     $attempts++;
                 } while ($winAmount <= 0 && $attempts < 10);
 
-                // উইন ট্রিপল সেফটি ক্যাপ (বেট সাইজ অনুযায়ী ডাইনামিক করা হয়েছে যেন ইমব্যালেন্স না হয়)
+                // উইন ট্রিপল সেফটি ক্যাপ
                 $maxWinAllowedPerSpin = $effectiveBetForPayout * 5; 
                 if ($winAmount > $maxWinAllowedPerSpin) {
                     $winAmount = $maxWinAllowedPerSpin;
                 }
 
-                // 🛑 কঠোর সেফটি চেক ১: ১ম ডিপোজিটে জোড় আইডির ব্যালেন্স ২৭০ এর উপরে ক্রস করতে না দেওয়া
+                // 🛑 কঠোর সেফটি চেক ১: ১ম ডিপোজিটে জোড় আইডির ব্যালেন্স ডায়নামিক লিমিট (২৭০ - ৩০৫) এর উপরে ক্রস করতে না দেওয়া
                 if ($isFirstDay && !$isTurnoverCompleted && $depositCount <= 1 && $isUserIdEven) {
                     $projectedBalance = ($currentWalletTotal - $betAmount) + $winAmount;
-                    if ($projectedBalance > 270.00) {
-                        $winAmount = max(0, 270.00 - ($currentWalletTotal - $betAmount));
+                    if ($projectedBalance > $dynamicCeiling) {
+                        $winAmount = max(0, $dynamicCeiling - ($currentWalletTotal - $betAmount));
                     }
                 }
 
-                // 🛑 কঠোর সেফটি চেক ২: ২য় ডিপোজিট (বেজোড়) ও ৩য় ডিপোজিট (জোড়) এর ব্যালেন্স ডাবল (২x) লক করা
+                // 🛑 কঠোর সেফটি চেক ২: ২য় ডিপোজিট (বেজোড়) ও ৩য় ডিপোজিট (জোড়) এর ব্যালেন্স ডাবল (২x) লক করা
                 if ($isFirstDay && !$isTurnoverCompleted && ($depositCount === 2 || $depositCount === 3)) {
                     $isAllowedToWin = ($depositCount === 2 && !$isUserIdEven) || ($depositCount === 3 && $isUserIdEven);
                     if ($isAllowedToWin) {
@@ -315,6 +337,9 @@ public function playGame(Request $request)
                 'sender_number' => $gameSlug,
                 'status'        => 'approved'
             ]);
+            
+            // ⚡ গেম খেলার সাথে সাথে ক্যাশ ক্লিয়ার করা হচ্ছে যাতে পরবর্তী ক্যালকুলেশনে আপডেটেড ডাটা পাওয়া যায়
+            Cache::forget("user_turnover_{$user->id}");
         });
 
         $freshWallet = $wallet->fresh();
@@ -338,6 +363,8 @@ public function playGame(Request $request)
             'current_bonus_balance' => (float)$freshWallet->bonus_balance,
             'message'               => $gameMessage,
             'turnover_status'       => "আপনার টার্নওভার সম্পূর্ণ করতে আরও  " . round($remainingWagering, 2) . " টাকার গেম খেলতে হবে।",
+            'turnover_progress_ratio' => $progressRatio,
+            'remainingWagering'     => $remainingWagering,
         ];
 
         if ($gameSlug === 'slots') {
@@ -365,38 +392,6 @@ public function playGame(Request $request)
         return response()->json($response);
     }
 
-    public function calculateCurrentTurnover($userId)
-    {
-        $lastDeposit = Transaction::where('user_id', $userId)
-            ->where('type', 'deposit')
-            ->where('status', 'approved')
-            ->latest()
-            ->first();
-
-        if (!$lastDeposit) {
-            return ['deposit_amount' => 0, 'target_turnover' => 0, 'current_wagering' => 0, 'progress_ratio' => 0];
-        }
-
-        $depositAmount = (float)$lastDeposit->amount;
-        $targetTurnover = $depositAmount * 2; 
-
-        $currentWagering = Transaction::where('user_id', $userId)
-            ->whereIn('type', ['game_play', 'free_spin_play'])
-            ->where('created_at', '>=', $lastDeposit->created_at)
-            ->where('amount', '<', 0)
-            ->sum('amount');
-
-        $currentWagering = abs($currentWagering); 
-
-        $progressRatio = $targetTurnover > 0 ? ($currentWagering / $targetTurnover) : 0;
-
-        return [
-            'deposit_amount'   => $depositAmount,
-            'target_turnover'  => $targetTurnover,
-            'current_wagering' => $currentWagering,
-            'progress_ratio'   => $progressRatio
-        ];
-    }
 
     private function generateGrid($featureBuy = false, $forceLowWin = false, $isFreeSpin = false, $isLowSymbolSpike = false)
     {
@@ -503,10 +498,12 @@ public function playGame(Request $request)
         if (!$wallet || $wallet->balance < $withdrawAmount) {
             return response()->json([
                 'success' => false,
-                'message' => 'মেইন ওয়ালেটে পর্যাপ্ত ব্যালেন্স নেই। বোনাস ব্যালেন্স উইথড্রযোগ্য নয়।'
+                'message' => 'মেইন ওয়ালেটে পর্যাপ্ত ব্যালেন্স নেই। বোনাস ব্যালেন্স উইথড্রযোগ্য নয়।'
             ], 400);
         }
 
+        // রিয়েল-টাইম টার্নওভার ডাটা পেতে এখানেও আগে ক্যাশ ক্লিয়ার করে নেওয়া ভালো
+        Cache::forget("user_turnover_{$user->id}");
         $turnoverStatus = $this->calculateCurrentTurnover($user->id);
         
         if ($turnoverStatus['deposit_amount'] > 0 && $turnoverStatus['progress_ratio'] < 1.0) {
@@ -528,6 +525,9 @@ public function playGame(Request $request)
                 'receiver_number' => $request->receiver_number,
                 'status'          => 'pending',
             ]);
+            
+            // উইথড্র করার পর আবার ক্যাশ রিসেট
+            Cache::forget("user_turnover_{$user->id}");
         });
 
         return response()->json([

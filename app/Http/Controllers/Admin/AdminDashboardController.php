@@ -8,6 +8,7 @@ use App\Models\Transaction;
 use App\Models\Wallet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 
 class AdminDashboardController extends Controller
 {
@@ -26,14 +27,22 @@ class AdminDashboardController extends Controller
         // ২. ট্রানজেকশন ফিল্টারিং ও সার্চিং (Frontend/Backend Pagination)
         $search = $request->input('search');
         $transactions = Transaction::with('user')
-            ->when($search, function ($query, $search) {
-                return $query->where('sender_number', 'like', "%{$search}%")
-                    ->orWhere('trx_id', 'like', "%{$search}%")
-                    ->orWhere('type', 'like', "%{$search}%")
-                    ->orWhere('status', 'like', "%{$search}%");
-            })
-            ->latest()
-            ->paginate(10);
+        // ১. শুধুমাত্র deposit এবং withdraw টাইপ ফিল্টার করা হচ্ছে
+        ->whereIn('type', ['deposit', 'withdraw']) 
+        
+        // ২. সার্চ ফিল্টার (যদি সার্চ করা হয়)
+        ->when($search, function ($query, $search) {
+            return $query->where(function ($q) use ($search) {
+                $q->where('id', 'LIKE', "%{$search}%")
+                  ->orWhere('status', 'LIKE', "%{$search}%")
+                  ->orWhere('amount', 'LIKE', "%{$search}%")
+                  ->orWhereHas('user', function ($u) use ($search) {
+                      $u->where('name', 'LIKE', "%{$search}%");
+                  });
+            });
+        })
+        ->latest()
+        ->paginate(10);
 
         $gameSettings = GameSetting::all();
 
@@ -64,12 +73,14 @@ class AdminDashboardController extends Controller
 
     public function approveTransaction($id, $status)
     {
-        $transaction = Transaction::findOrFail($id);
-        if ($transaction->status !== 'pending') {
-            return redirect()->back()->with('error', 'Transaction already processed.');
-        }
+        return DB::transaction(function () use ($id, $status) {
+            // lockForUpdate() দিয়ে রেকর্ডটি লক করে রাখা হচ্ছে
+            $transaction = Transaction::where('id', $id)->lockForUpdate()->firstOrFail();
 
-        DB::transaction(function () use ($transaction, $status) {
+            if ($transaction->status !== 'pending') {
+                return redirect()->back()->with('error', 'Transaction already processed.');
+            }
+
             if ($status === 'approved') {
                 $transaction->status = 'approved';
                 $transaction->save();
@@ -77,6 +88,9 @@ class AdminDashboardController extends Controller
                 if ($transaction->type === 'deposit') {
                     $wallet = Wallet::firstOrCreate(['user_id' => $transaction->user_id]);
                     $wallet->increment('balance', $transaction->amount);
+
+                    // ক্যাশ ক্লিয়ার করা হচ্ছে যাতে নতুন ডিপোজিটের ভিত্তিতে টার্নওভার রিক্যালকুলেট হয়
+                    Cache::forget("user_turnover_{$transaction->user_id}");
                 }
             } else {
                 $transaction->status = 'rejected';
@@ -87,11 +101,13 @@ class AdminDashboardController extends Controller
                     if ($wallet) {
                         $wallet->increment('balance', $transaction->amount);
                     }
+                    // উইথড্র রিজেক্ট হলেও টার্নওভার ক্যাশ আপডেট করে দেওয়া সেফ
+                    Cache::forget("user_turnover_{$transaction->user_id}");
                 }
             }
-        });
 
-        return redirect()->back()->with('success', 'Transaction updated to ' . $status);
+            return redirect()->back()->with('success', 'Transaction updated to ' . $status);
+        });
     }
 
     public function claimReferralBonus()

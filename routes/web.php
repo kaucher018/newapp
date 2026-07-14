@@ -35,7 +35,7 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
     
     // গেম অ্যালগরিদম আপডেট রাউট
-    Route::post('/game-settings/{id}/update', [AdminDashboardController::class, 'updateGameAlgorithm'])->name('game.update');
+    Route::post('/name-settings/{id}/update', [AdminDashboardController::class, 'updateGameAlgorithm'])->name('game.update');
     
     // ট্রানজেকশন অ্যাপ্রুভ/রিজেক্ট রাউট
     Route::post('/transactions/{id}/{status}', [AdminDashboardController::class, 'approveTransaction'])->name('transaction.status');
@@ -48,19 +48,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-// এপিআই রাউটস
-Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
-    // ওয়ালেট ও ট্রানজেকশন
-    Route::get('/deposit/details', [WalletController::class, 'getDepositDetails']);
-    Route::post('/deposit/submit', [WalletController::class, 'submitDeposit']);
-    Route::post('/withdraw/submit', [WalletController::class, 'submitWithdraw']);
-    Route::post('/getWalletBalance', [WalletController::class, 'getWalletBalance']);
-    Route::post('/referral/daily-bonus', [WalletController::class, 'claimDailyBonus']);
 
-    // গেম এপিআই
-    Route::get('/games', [GameController::class, 'getActiveGames']);
-    Route::post('/game/play', [GameController::class, 'playGame']);
-});
 
 Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     // আগের ওয়ালেট রাউটস...

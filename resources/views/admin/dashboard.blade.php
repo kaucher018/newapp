@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Casino Admin Dashboard</title>
+    <title>Admin Dashboard</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- FontAwesome Icons -->
@@ -30,8 +30,8 @@
         <div>
             <!-- Logo Section -->
             <div class="h-20 flex items-center px-6 border-b border-gray-800">
-                <i class="fa-solid fa-dice-d20 font-orbitron text-2xl text-red-500 mr-3 animate-spin" style="animation-duration: 10s;"></i>
-                <span class="font-orbitron text-xl font-bold tracking-wider text-white">CASINO<span class="text-red-500">PRO</span></span>
+                <i class="fa-solid fa-shield-halved font-orbitron text-2xl text-red-500 mr-3"></i>
+                <span class="font-orbitron text-xl font-bold tracking-wider text-white">ADMIN<span class="text-red-500">PRO</span></span>
             </div>
 
             <!-- Navigation Links -->
@@ -43,10 +43,6 @@
                 <a href="#pending-trans" class="flex items-center px-4 py-3 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg font-semibold transition">
                     <i class="fa-solid fa-clock-rotate-left w-6"></i>
                     <span>Pending Requests</span>
-                </a>
-                <a href="#algorithm" class="flex items-center px-4 py-3 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg font-semibold transition">
-                    <i class="fa-solid fa-gamepad w-6"></i>
-                    <span>Game Algorithms</span>
                 </a>
                 <a href="#transactions" class="flex items-center px-4 py-3 text-gray-400 hover:text-white hover:bg-gray-800/50 rounded-lg font-semibold transition">
                     <i class="fa-solid fa-receipt w-6"></i>
@@ -83,7 +79,7 @@
                         <i class="fa-solid fa-sack-dollar text-xl"></i>
                     </div>
                     <div>
-                        <p class="text-xs text-gray-400 uppercase tracking-wider">Net Profit Balance</p>
+                        <p class="text-xs text-gray-400 uppercase tracking-wider">Net Revenue Balance</p>
                         <p class="text-lg font-orbitron font-bold text-emerald-400">৳{{ number_format($netProfit ?? 0, 2) }}</p>
                     </div>
                 </div>
@@ -144,14 +140,14 @@
                             <i class="fa-solid fa-money-bill-transfer text-xl"></i>
                         </div>
                     </div>
-                    <div class="mt-4 border-t border-gray-800 pt-3 text-xs text-gray-500">Payouts completed to player accounts</div>
+                    <div class="mt-4 border-t border-gray-800 pt-3 text-xs text-gray-500">Payouts completed to user accounts</div>
                 </div>
 
                 <!-- Net Profit Margin -->
                 <div class="neon-card rounded-2xl p-6 relative overflow-hidden border-emerald-500/30">
                     <div class="flex justify-between items-start">
                         <div>
-                            <p class="text-gray-400 text-sm font-semibold uppercase">Platform Net Profit</p>
+                            <p class="text-gray-400 text-sm font-semibold uppercase">Platform Net Revenue</p>
                             <h3 class="text-3xl font-orbitron font-bold text-emerald-400 mt-2">৳{{ number_format($netProfit ?? 0, 2) }}</h3>
                         </div>
                         <div class="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -184,12 +180,10 @@
                                     <p class="text-[10px] text-gray-500 mt-1">{{ $deposit->created_at->diffForHumans() }}</p>
                                 </div>
                                 <div class="flex gap-2">
-                                    {{-- Route: admin.transaction.status (Approved) --}}
                                     <form method="POST" action="{{ route('admin.transaction.status', ['id' => $deposit->id, 'status' => 'approved']) }}">
                                         @csrf
                                         <button type="submit" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/40 px-3 py-1.5 rounded-lg text-xs font-bold transition">Approve</button>
                                     </form>
-                                    {{-- Route: admin.transaction.status (Rejected) --}}
                                     <form method="POST" action="{{ route('admin.transaction.status', ['id' => $deposit->id, 'status' => 'rejected']) }}">
                                         @csrf
                                         <button type="submit" class="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 px-3 py-1.5 rounded-lg text-xs font-bold transition">Reject</button>
@@ -222,12 +216,10 @@
                                     <p class="text-[10px] text-gray-500 mt-1">{{ $withdraw->created_at->diffForHumans() }}</p>
                                 </div>
                                 <div class="flex gap-2">
-                                    {{-- Route: admin.transaction.status (Approved) --}}
                                     <form method="POST" action="{{ route('admin.transaction.status', ['id' => $withdraw->id, 'status' => 'approved']) }}">
                                         @csrf
                                         <button type="submit" class="bg-emerald-600/20 hover:bg-emerald-600 text-emerald-400 hover:text-white border border-emerald-500/40 px-3 py-1.5 rounded-lg text-xs font-bold transition">Approve</button>
                                     </form>
-                                    {{-- Route: admin.transaction.status (Rejected) --}}
                                     <form method="POST" action="{{ route('admin.transaction.status', ['id' => $withdraw->id, 'status' => 'rejected']) }}">
                                         @csrf
                                         <button type="submit" class="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/40 px-3 py-1.5 rounded-lg text-xs font-bold transition">Reject</button>
@@ -241,129 +233,79 @@
                 </div>
             </section>
 
-            <!-- GAME ALGORITHM CONTROL -->
-            <section id="algorithm" class="neon-card rounded-2xl p-6">
-                <h2 class="text-lg font-orbitron font-bold text-white mb-6 flex items-center gap-2">
-                    <i class="fa-solid fa-sliders text-red-500"></i> Game Profit & Probability Algorithms
-                </h2>
+<!-- TRANSACTION LOGS & SEARCH -->
+<section id="transactions" class="neon-card rounded-2xl p-6">
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <h2 class="text-lg font-orbitron font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-list-check text-emerald-400"></i> System Transaction Logs
+        </h2>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    @forelse($gameSettings ?? [] as $game)
-                        <div class="bg-[#121520] border border-gray-800 p-5 rounded-xl">
-                            {{-- Route: admin.game.update --}}
-                            <form method="POST" action="{{ route('admin.game.update', ['id' => $game->id]) }}">
-                                @csrf
-                                <div class="flex justify-between items-center mb-4">
-                                    <h4 class="font-bold text-white text-md uppercase font-orbitron">{{ $game->game_name ?? 'Game #'.$game->id }}</h4>
-                                    <span class="text-xs px-2.5 py-1 bg-red-500/10 border border-red-500/30 text-red-400 rounded-md font-bold uppercase">{{ $game->algorithm_mode }} Mode</span>
-                                </div>
+        <!-- Search Form -->
+        <form method="GET" action="{{ route('admin.dashboard') }}" class="flex items-center gap-2">
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
+                <input type="text" name="search" value="{{ request('search') }}" placeholder="Search ID, Type, Status..." class="bg-[#121520] border border-gray-700 text-white text-sm rounded-lg pl-9 pr-4 py-2 focus:outline-none focus:border-red-500 w-64">
+            </div>
+            <button type="submit" class="bg-gray-800 hover:bg-gray-700 text-white text-xs px-4 py-2.5 rounded-lg font-bold transition">Search</button>
+            @if(request('search'))
+                <a href="{{ route('admin.dashboard') }}" class="text-xs text-gray-400 hover:text-white underline">Clear</a>
+            @endif
+        </form>
+    </div>
 
-                                <div class="space-y-4">
-                                    <div>
-                                        <label class="text-xs text-gray-400 block mb-1">Algorithm Mode</label>
-                                        <select name="algorithm_mode" class="w-full bg-[#0d0f17] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">
-                                            <option value="normal" {{ $game->algorithm_mode === 'normal' ? 'selected' : '' }}>Normal (Fair)</option>
-                                            <option value="promo" {{ $game->algorithm_mode === 'promo' ? 'selected' : '' }}>Promo (High Win Rate)</option>
-                                            <option value="admin_profit" {{ $game->algorithm_mode === 'admin_profit' ? 'selected' : '' }}>Admin Profit (High House Edge)</option>
-                                        </select>
-                                    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+            <thead class="bg-[#121520] text-gray-400 uppercase text-xs">
+                <tr>
+                    <th class="py-3 px-4">ID</th>
+                    <th class="py-3 px-4">User</th>
+                    <th class="py-3 px-4">Type</th>
+                    <th class="py-3 px-4">Amount</th>
+                    <th class="py-3 px-4">Sender/Reference</th>
+                    <th class="py-3 px-4">Status</th>
+                    <th class="py-3 px-4">Date</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800/60 text-gray-300">
+                @forelse($transactions as $trx)
+                    <tr class="hover:bg-gray-800/30">
+                        <td class="py-3 px-4 font-mono text-xs">#{{ $trx->id }}</td>
+                        <td class="py-3 px-4 font-bold text-white">{{ $trx->user->name ?? 'User #'.$trx->user_id }}</td>
+                        <td class="py-3 px-4">
+                            <span class="uppercase text-[10px] px-2 py-0.5 rounded font-bold 
+                                {{ $trx->type === 'deposit' ? 'bg-blue-500/20 text-blue-400' : '' }}
+                                {{ $trx->type === 'withdraw' ? 'bg-purple-500/20 text-purple-400' : '' }}">
+                                {{ $trx->type }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 font-bold">৳{{ number_format($trx->amount, 2) }}</td>
+                        <td class="py-3 px-4 text-xs font-mono text-gray-400">{{ $trx->sender_number ?? 'N/A' }}</td>
+                        <td class="py-3 px-4">
+                            <span class="capitalize text-xs font-bold 
+                                {{ $trx->status === 'approved' ? 'text-emerald-400' : '' }}
+                                {{ $trx->status === 'pending' ? 'text-amber-400' : '' }}
+                                {{ $trx->status === 'rejected' ? 'text-red-400' : '' }}">
+                                {{ $trx->status }}
+                            </span>
+                        </td>
+                        <td class="py-3 px-4 text-xs text-gray-500">{{ $trx->created_at ? $trx->created_at->format('M d, Y h:i A') : 'N/A' }}</td>
+                    </tr>
+                @empty
+                    <tr>
+                        <td colspan="7" class="py-6 text-center text-gray-500">No deposit or withdraw transactions found.</td>
+                    </tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
 
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label class="text-xs text-gray-400 block mb-1">Admin Margin (%)</label>
-                                            <input type="number" name="normal_admin_percent" value="{{ $game->normal_admin_percent }}" class="w-full bg-[#0d0f17] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">
-                                        </div>
-                                        <div>
-                                            <label class="text-xs text-gray-400 block mb-1">User Return (%)</label>
-                                            <input type="number" name="normal_user_percent" value="{{ $game->normal_user_percent }}" class="w-full bg-[#0d0f17] border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500">
-                                        </div>
-                                    </div>
-
-                                    <button type="submit" class="w-full py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-lg transition duration-200 uppercase tracking-wider">Save Settings</button>
-                                </div>
-                            </form>
-                        </div>
-                    @empty
-                        <div class="col-span-2 text-center py-6 text-gray-500">No game settings found.</div>
-                    @endforelse
-                </div>
-            </section>
-
-            <!-- TRANSACTION LOGS & SEARCH -->
-            <section id="transactions" class="neon-card rounded-2xl p-6">
-                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                    <h2 class="text-lg font-orbitron font-bold text-white flex items-center gap-2">
-                        <i class="fa-solid fa-list-check text-emerald-400"></i> System Transaction Logs
-                    </h2>
-
-                    <!-- Search Form -->
-                    {{-- Route: admin.dashboard --}}
-                    <form method="GET" action="{{ route('admin.dashboard') }}" class="flex items-center gap-2">
-                        <div class="relative">
-                            <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm"></i>
-                            <input type="text" name="search" value="{{ request('search') }}" placeholder="Search ID, Type, Status..." class="bg-[#121520] border border-gray-700 text-white text-sm rounded-lg pl-9 pr-4 py-2 focus:outline-none focus:border-red-500 w-64">
-                        </div>
-                        <button type="submit" class="bg-gray-800 hover:bg-gray-700 text-white text-xs px-4 py-2.5 rounded-lg font-bold transition">Search</button>
-                        @if(request('search'))
-                            <a href="{{ route('admin.dashboard') }}" class="text-xs text-gray-400 hover:text-white underline">Clear</a>
-                        @endif
-                    </form>
-                </div>
-
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm">
-                        <thead class="bg-[#121520] text-gray-400 uppercase text-xs">
-                            <tr>
-                                <th class="py-3 px-4">ID</th>
-                                <th class="py-3 px-4">User</th>
-                                <th class="py-3 px-4">Type</th>
-                                <th class="py-3 px-4">Amount</th>
-                                <th class="py-3 px-4">Sender/Reference</th>
-                                <th class="py-3 px-4">Status</th>
-                                <th class="py-3 px-4">Date</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-gray-800/60 text-gray-300">
-                            @forelse($transactions ?? [] as $trx)
-                                <tr class="hover:bg-gray-800/30">
-                                    <td class="py-3 px-4 font-mono text-xs">#{{ $trx->id }}</td>
-                                    <td class="py-3 px-4 font-bold text-white">{{ $trx->user->name ?? 'User #'.$trx->user_id }}</td>
-                                    <td class="py-3 px-4">
-                                        <span class="uppercase text-[10px] px-2 py-0.5 rounded font-bold 
-                                            {{ $trx->type === 'deposit' ? 'bg-blue-500/20 text-blue-400' : '' }}
-                                            {{ $trx->type === 'withdraw' ? 'bg-purple-500/20 text-purple-400' : '' }}
-                                            {{ $trx->type === 'bonus' ? 'bg-amber-500/20 text-amber-400' : '' }}">
-                                            {{ $trx->type }}
-                                        </span>
-                                    </td>
-                                    <td class="py-3 px-4 font-bold">৳{{ number_format($trx->amount, 2) }}</td>
-                                    <td class="py-3 px-4 text-xs font-mono text-gray-400">{{ $trx->sender_number ?? 'N/A' }}</td>
-                                    <td class="py-3 px-4">
-                                        <span class="capitalize text-xs font-bold 
-                                            {{ $trx->status === 'approved' ? 'text-emerald-400' : '' }}
-                                            {{ $trx->status === 'pending' ? 'text-amber-400' : '' }}
-                                            {{ $trx->status === 'rejected' ? 'text-red-400' : '' }}">
-                                            {{ $trx->status }}
-                                        </span>
-                                    </td>
-                                    <td class="py-3 px-4 text-xs text-gray-500">{{ $trx->created_at ? $trx->created_at->format('M d, Y h:i A') : 'N/A' }}</td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="7" class="py-6 text-center text-gray-500">No transactions recorded yet.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination Links -->
-                @if(isset($transactions) && method_exists($transactions, 'links'))
-                    <div class="mt-6">
-                        {{ $transactions->links() }}
-                    </div>
-                @endif
-            </section>
+    <!-- Pagination Links -->
+    @if(isset($transactions) && method_exists($transactions, 'links'))
+        <div class="mt-6">
+            {{ $transactions->links() }}
+        </div>
+    @endif
+</section>
 
         </main>
     </div>

@@ -11,14 +11,20 @@ use Jenssegers\Agent\Agent;
 class AuthController extends Controller {
     
     // 📱 FLUTTER MOBILE API: রেজিস্ট্রেশন (Device Limit Check সহ)
-  public function apiRegister(Request $request) 
+public function apiRegister(Request $request) 
 {
+    // খালি স্ট্রিং পাঠানো হলে তা null হিসেবে গণ্য করার জন্য ConvertEmptyStringsToNull মিডলওয়্যার কাজ না করলে ম্যানুয়ালি সেট করা
+    if ($request->has('referred_by') && empty($request->referred_by)) {
+        $request->merge(['referred_by' => null]);
+    }
+
     $request->validate([
         'name' => 'required|string|max:255',
-        'username' => 'required|string|min:5|unique:users',
-        'mobile' => 'required|string|unique:users',
-        'password' => 'required|string|min:6',
-        'referral_code' => 'nullable|string|exists:users,referral_code', // 👈 কোড দিলে তা ডাটাবেজে থাকতে হবে
+        'username' => 'required|string|min:5|unique:users,username',
+        'mobile' => 'required|string|unique:users,mobile',
+        'email' => 'nullable|email|unique:users,email',
+        'password' => 'required|string|min:6|confirmed', // 👈 confirmed যুক্ত করা হয়েছে
+        'referred_by' => 'nullable|string|exists:users,referral_code', // 👈 রেফারেল কোড থাকলে ডাটাবেজে থাকতে হবে
     ]);
 
     $agent = new \Jenssegers\Agent\Agent();
@@ -27,8 +33,8 @@ class AuthController extends Controller {
 
     // মাল্টি-অ্যাকাউন্ট চেক
     $existingAccounts = \App\Models\User::where('register_device_id', $deviceId)
-                            ->orWhere('register_ip', $ip)
-                            ->count();
+                                ->orWhere('register_ip', $ip)
+                                ->count();
 
     if ($existingAccounts >= 2) {
         return response()->json([
@@ -37,35 +43,25 @@ class AuthController extends Controller {
         ], 403);
     }
 
-    // --- রেফারেল চেক লজিক শুরু ---
-    $referredBy = null;
-    if ($request->filled('referral_code')) {
-        $referrerUser = \App\Models\User::where('referral_code', $request->referral_code)->first();
-        if ($referrerUser) {
-            $referredBy = $referrerUser->id; // যে রেফার করেছে তার আইডি
-        }
-    }
-    // --- রেফারেল চেক লজিক শেষ ---
-
-    // ডাটাবেজ ট্রানজেকশন ব্যবহার করা হয়েছে যাতে ইউজার ও ওয়ালেট দুটিই একসাথে সফলভাবে তৈরি হয়
-    $user = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $ip, $deviceId, $referredBy) {
+    // ডাটাবেজ ট্রানজেকশন
+    $user = \Illuminate\Support\Facades\DB::transaction(function () use ($request, $ip, $deviceId) {
         
         // ১. ইউজার ক্রিয়েট
         $newUser = \App\Models\User::create([
             'name' => $request->name,
             'username' => $request->username,
-            'email' => $request->email ?? null, // ইমেইল অপশনাল হলে
+            'email' => $request->email ?? null,
             'mobile' => $request->mobile,
             'password' => \Illuminate\Support\Facades\Hash::make($request->password),
-            'role' => 'player', // আপনার প্রোজেক্টের ডিফল্ট প্লেয়ার রোল
-            'referral_code' => strtoupper(\Illuminate\Support\Str::random(8)), // 👈 নতুন ইউজারের নিজস্ব ইউনিক কোড জেনারেট
-            'referred_by' => $referredBy, // 👈 কে রেফার করল তার আইডি লিংক হলো
+            'role' => 'player',
+            'referral_code' => strtoupper(\Illuminate\Support\Str::random(8)), // নতুন ইউজারের কোড
+            'referred_by' => $request->referred_by, // রেফারারের কোড/আইডি
             'register_ip' => $ip,
             'register_device_id' => $deviceId,
             'last_login_ip' => $ip,
         ]);
 
-        // ২. ইউজারের জন্য ওয়ালেট অটো-ক্রিয়েট
+        // ২. ওয়ালেট অটো-ক্রিয়েট
         \App\Models\Wallet::create([
             'user_id' => $newUser->id,
             'balance' => 0.00,

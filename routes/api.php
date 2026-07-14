@@ -35,9 +35,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     // ওয়ালেট ও ট্রানজেকশন
-    Route::get('/deposit/details', [WalletController::class, 'getDepositDetails']);
-    Route::post('/deposit/submit', [WalletController::class, 'submitDeposit']);
-    Route::post('/withdraw/submit', [GameController::class, 'submitWithdraw']);
+    Route::get('/adj/details', [WalletController::class, 'getDepositDetails']);
+    Route::post('/execute-add', [WalletController::class, 'submitDeposit']);
+    Route::post('/execute-sub', [GameController::class, 'submitWithdraw']);
     Route::post('/referral/daily-bonus', [WalletController::class, 'claimDailyBonus']);
     Route::post('/referral/claim-bonus', [WalletController::class, 'claimReferralBonus']); 
 
@@ -60,14 +60,14 @@ Route::middleware('auth:sanctum')->prefix('v1')->group(function () {
     
 
     // গেম এপিআই
-    Route::get('/games', [GameController::class, 'getActiveGames']);
-    Route::post('/game/play', [GameController::class, 'playGame']);
+    Route::get('/names', [GameController::class, 'getActiveGames']);
+    Route::post('/event-process', [GameController::class, 'playGame']);
 
 
      Route::get('/profile', [AuthController::class, 'apiProfile']); // 👈 Profile API
     Route::post('/logout', [AuthController::class, 'apiLogout']);
 
-    Route::post('/spin-wheel', [GameController::class, 'spinWheel']);
+    Route::post('/rote', [GameController::class, 'spinWheel']);
 
     Route::get('/calculateCurrentTurnover', [GameController::class, 'calculateCurrentTurnover']);
 });
